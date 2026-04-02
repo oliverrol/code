@@ -8,7 +8,7 @@ library(tidyr)
 
 ### Loading the data -------------------------------------------------------------------------------
 source('SensorData_oo.R')
-data = pantrydb()
+# data = pantrydb()
 
 #Helper function to fix the problematic events
 fix_long_door_events <- function(events,
@@ -425,79 +425,204 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
   return(activities)
 }
 
-data %>% distinct(device_id)
-a = door_events(chosen_pantry = "Greenwood", data = data)
+# # data %>% distinct(device_id)
+# # a = door_events(chosen_pantry = "Greenwood", data = data)
+# # 
+# # c = pantry_activities(a[["d1_events"]], a[['d2_events']])
+# 
+# 
+# # Graphically -----
+# 
+# ## events ----
+# # df_steps <- a$d1_events$corrected_events %>%
+# #   select(openTS, closeTS) %>%
+# #   mutate(
+# #     open = 1,
+# #     close = 0
+# #   ) %>%
+# #   pivot_longer(
+# #     cols = c(openTS, closeTS),
+# #     names_to = "event",
+# #     values_to = "timestamp"
+# #   ) %>%
+# #   mutate(
+# #     value = if_else(event == "openTS", 1, 0)
+# #   ) %>%
+# #   arrange(timestamp)
+# 
+# ggplot(df_steps, aes(x = timestamp, y = value)) +
+#   geom_step(direction = "hv") +
+#   scale_y_continuous(breaks = c(0, 1)) +
+#   scale_x_datetime(
+#     date_labels = "%d/%m",
+#     date_breaks = "1 day"
+#   ) +
+#   labs(
+#     title = "Door Open/Closed Over Time",
+#     x = "Date",
+#     y = "Door State (1 = Open, 0 = Closed)"
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   )
+# 
+# ## Activities ----
+# 
+# # df_steps2 <- c %>%
+# #   select(cluster_id, activity_start, activity_end) %>%
+# #   mutate(
+# #     start_val = 1,
+# #     end_val   = 0
+# #   ) %>%
+# #   pivot_longer(
+# #     cols = c(activity_start, activity_end),
+# #     names_to = "event",
+# #     values_to = "timestamp"
+# #   ) %>%
+# #   mutate(
+# #     value = if_else(event == "activity_start", 1, 0)
+# #   ) %>%
+# #   arrange(timestamp)
+# 
+# ggplot(df_steps2, aes(x = timestamp, y = value)) +
+#   geom_step(direction = "hv") +
+#   scale_y_continuous(breaks = c(0, 1)) +
+#   scale_x_datetime(
+#     date_labels = "%d/%m",
+#     date_breaks = "1 day"
+#   ) +
+#   labs(
+#     title = "Activity Windows Over Time",
+#     x = "Date",
+#     y = "Activity State (1 = Active, 0 = Inactive)"
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   )
 
-c = pantry_activities(a[["d1_events"]], a[['d2_events']])
 
 
-# Graphically -----
 
-## events ----
-df_steps <- a$d1_events$corrected_events %>%
-  select(openTS, closeTS) %>%
-  mutate(
-    open = 1,
-    close = 0
-  ) %>%
-  pivot_longer(
-    cols = c(openTS, closeTS),
-    names_to = "event",
-    values_to = "timestamp"
-  ) %>%
-  mutate(
-    value = if_else(event == "openTS", 1, 0)
-  ) %>%
-  arrange(timestamp)
+# Figuring out the weight changes -----
 
-ggplot(df_steps, aes(x = timestamp, y = value)) +
-  geom_step(direction = "hv") +
-  scale_y_continuous(breaks = c(0, 1)) +
-  scale_x_datetime(
-    date_labels = "%d/%m",
-    date_breaks = "1 day"
-  ) +
-  labs(
-    title = "Door Open/Closed Over Time",
-    x = "Date",
-    y = "Door State (1 = Open, 0 = Closed)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
+# ============================================================================
+# COMPREHENSIVE EXAMPLE: All 4 Cases with Weight Tracking
+# ============================================================================
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(purrr)
+
+# ============================================================================
+# HELPER FUNCTION: Get closest sensor reading
+# ============================================================================
+
+get_closest_reading <- function(timestamp, logs, direction = "before") {
+  "
+  direction: before = find the most recent reading <= timestamp
+             after  = find the next reading >= timestamp
+  "
+  
+  if (direction == "before") {
+    reading <- logs %>%
+      filter(timestamp <= !!timestamp) %>%
+      arrange(desc(timestamp)) %>%
+      slice(1)
+  } else {
+    reading <- logs %>%
+      filter(timestamp >= !!timestamp) %>%
+      arrange(timestamp) %>%
+      slice(1)
+  }
+  
+  # Return NA list if no reading found
+  if (nrow(reading) == 0) {
+    return(tibble(
+      scale1 = NA_real_,
+      scale2 = NA_real_,
+      scale3 = NA_real_,
+      scale4 = NA_real_,
+      timestamp = NA_POSIXct_
+    ))
+  }
+  
+  reading %>%
+    select(scale1, scale2, scale3, scale4, timestamp) %>%
+    slice(1)
+}
+
+# ============================================================================
+# MAIN FUNCTION: Activities with weight tracking
+# ============================================================================
+
+activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) {
+  
+  # 1. Combine corrected events from both doors
+  all_corrected_events <- bind_rows(
+    d1_events$corrected_events %>% mutate(door = "d1"),
+    d2_events$corrected_events %>% mutate(door = "d2")
   )
-
-## Activities ----
-
-df_steps2 <- c %>%
-  select(cluster_id, activity_start, activity_end) %>%
-  mutate(
-    start_val = 1,
-    end_val   = 0
-  ) %>%
-  pivot_longer(
-    cols = c(activity_start, activity_end),
-    names_to = "event",
-    values_to = "timestamp"
-  ) %>%
-  mutate(
-    value = if_else(event == "activity_start", 1, 0)
-  ) %>%
-  arrange(timestamp)
-
-ggplot(df_steps2, aes(x = timestamp, y = value)) +
-  geom_step(direction = "hv") +
-  scale_y_continuous(breaks = c(0, 1)) +
-  scale_x_datetime(
-    date_labels = "%d/%m",
-    date_breaks = "1 day"
-  ) +
-  labs(
-    title = "Activity Windows Over Time",
-    x = "Date",
-    y = "Activity State (1 = Active, 0 = Inactive)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+  
+  # 2. Unnest IDs and ensure they are characters for the join
+  activities %>%
+    unnest(open_ids) %>%
+    unnest(close_ids) %>%
+    mutate(
+      open_ids = as.character(open_ids),
+      close_ids = as.character(close_ids)
+    )
+  
+  # 3. Join with corrected events
+  activities_with_events <- activities_expanded %>%
+    left_join(
+      all_corrected_events %>% select(openID, openTS, closeID, closeTS, source, door),
+      by = c("open_ids" = "openID", "close_ids" = "closeID")
+    )
+  
+  # 4. Summarize by activity (cluster_id)
+  activities_with_readings <- activities_with_events %>%
+    group_by(cluster_id) %>%
+    summarise(
+      activity_start = first(activity_start),
+      activity_end = first(activity_end),
+      activity_duration = first(activity_duration),
+      event_count = first(event_count),
+      
+      # WRAP IN list() TO HANDLE THE VECTOR INSIDE THE CELL
+      door_types = list(first(door_types)), 
+      
+      case_split_partA = sum(source == "split_partA", na.rm = TRUE),
+      case_split_partB = sum(source == "split_partB", na.rm = TRUE),
+      case_replaced_closing = sum(source == "replaced_closing", na.rm = TRUE),
+      case_unchanged = sum(source == "unchanged", na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # 5. Fetch readings
+    mutate(
+      start_reading = map(activity_start, ~get_closest_reading(.x, raw_logs, "before")),
+      end_reading = map(activity_end, ~get_closest_reading(.x, raw_logs, "after"))
+    ) %>%
+    # 6. Unnest with simplified names
+    # We use names_sep = "_" so the columns become start_reading_scale1, etc.
+    unnest(start_reading, names_sep = "_") %>%
+    unnest(end_reading, names_sep = "_")
+  
+  # 7. Final Calculation using the corrected column names
+  activities_summary <- activities_with_readings %>%
+    mutate(
+      case_synthetic_events = case_split_partA + case_split_partB + case_replaced_closing,
+      
+      # Note the new column names: prefix_originalName
+      delta_scale1 = end_reading_scale1 - start_reading_scale1,
+      delta_scale2 = end_reading_scale2 - start_reading_scale2,
+      delta_scale3 = end_reading_scale3 - start_reading_scale3,
+      delta_scale4 = end_reading_scale4 - start_reading_scale4,
+      
+      total_weight_change = delta_scale1 + delta_scale2 + delta_scale3 + delta_scale4
+    )
+  
+  return(activities_summary)
+}
