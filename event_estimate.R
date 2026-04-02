@@ -560,6 +560,10 @@ get_closest_reading <- function(timestamp, logs, direction = "before") {
 
 activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) {
   
+  
+  raw_logs = raw_logs %>% 
+    mutate(timestamp = ymd_hms(timestamp, tz = "UTC"),
+           timestamp = with_tz(timestamp, "America/Los_Angeles"))
   # 1. Combine corrected events from both doors
   all_corrected_events <- bind_rows(
     d1_events$corrected_events %>% mutate(door = "d1"),
@@ -567,7 +571,7 @@ activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) 
   )
   
   # 2. Unnest IDs and ensure they are characters for the join
-  activities %>%
+  activities_expanded= activities %>%
     unnest(open_ids) %>%
     unnest(close_ids) %>%
     mutate(
