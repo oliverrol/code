@@ -1,0 +1,12 @@
+# Copy this file to ~/.Renviron and fill in your values.
+# Run readRenviron("~/.Renviron") or restart R for changes to take effect.
+#
+# SQL_DRIVER is optional: if left blank, the correct driver is auto-detected
+# (Mac: Homebrew libmsodbcsql, Windows: ODBC Driver 18 for SQL Server).
+# Override only if your driver is installed in a non-standard location.
+
+SQL_SERVER=micropantry-sql-server.database.windows.net
+SQL_DATABASE=pantry-sql
+SQL_USER=StudentUser
+SQL_PASSWORD=your_password_here
+SQL_DRIVER=

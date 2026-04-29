@@ -6,23 +6,34 @@ library(lubridate)
 library(scales)
 library(fuzzyjoin)
 
-
+readRenviron("~/.Renviron")
 pantrydb = function () {
   now = today()
+
+  driver <- Sys.getenv("SQL_DRIVER", unset = NA)
+  if (is.na(driver) || driver == "") {
+    driver <- if (Sys.info()[["sysname"]] == "Darwin") {
+      "/opt/homebrew/lib/libmsodbcsql.18.dylib"
+    } else {
+      "ODBC Driver 18 for SQL Server"
+    }
+  }
+
   con <- dbConnect(
     odbc(),
-    Driver   = Sys.getenv("SQL_DRIVER"),
-    Server   = Sys.getenv("SQL_SERVER"),
-    Database = Sys.getenv("SQL_DATABASE"),
-    UID      = Sys.getenv("SQL_USER"),
-    PWD      = Sys.getenv("SQL_PASSWORD"),
-    Encrypt  = "yes"
+    Driver                 = driver,
+    Server                 = Sys.getenv("SQL_SERVER"),
+    Database               = Sys.getenv("SQL_DATABASE"),
+    UID                    = Sys.getenv("SQL_USER"),
+    PWD                    = Sys.getenv("SQL_PASSWORD"),
+    Encrypt                = "yes",
+    TrustServerCertificate = "yes"
   )
-  
+  on.exit(dbDisconnect(con))
+
   data <- dbGetQuery(con, "SELECT * FROM PantryLogs")
-  
-  #writing all the table to the /data folder
-  write.csv(data, paste("../data/data_",now,".csv",sep = "" ))
+
+  write.csv(data, paste0("../data/data_", now, ".csv"), row.names = FALSE)
   return(data)
 }
 

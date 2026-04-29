@@ -29,35 +29,35 @@ fix_long_door_events <- function(events,
   
   # Normalize timestamps ---------------------
   if (!is.null(tz)) {
-    events       <- events       %>% mutate(openTS = with_tz(openTS, tz), closeTS = with_tz(closeTS, tz))
-    other_events <- other_events %>% mutate(openTS = with_tz(openTS, tz), closeTS = with_tz(closeTS, tz))
-    raw_logs     <- raw_logs     %>% mutate(timestamp = with_tz(timestamp, tz))
+    events       <- events       |>mutate(openTS = with_tz(openTS, tz), closeTS = with_tz(closeTS, tz))
+    other_events <- other_events |>mutate(openTS = with_tz(openTS, tz), closeTS = with_tz(closeTS, tz))
+    raw_logs     <- raw_logs     |>mutate(timestamp = with_tz(timestamp, tz))
   }
   
-  events       <- events       %>% mutate(openTS = as.POSIXct(openTS), closeTS = as.POSIXct(closeTS))
-  other_events <- other_events %>% mutate(openTS = as.POSIXct(openTS), closeTS = as.POSIXct(closeTS))
-  raw_logs     <- raw_logs     %>% mutate(timestamp = as.POSIXct(timestamp))
+  events       <- events       |>mutate(openTS = as.POSIXct(openTS), closeTS = as.POSIXct(closeTS))
+  other_events <- other_events |>mutate(openTS = as.POSIXct(openTS), closeTS = as.POSIXct(closeTS))
+  raw_logs     <- raw_logs     |>mutate(timestamp = as.POSIXct(timestamp))
   
 
   # Coerce IDs to character ---------------------
-  events       <- events       %>% mutate(openID = as.character(openID), closeID = as.character(closeID))
-  other_events <- other_events %>% mutate(openID = as.character(openID), closeID = as.character(closeID))
+  events       <- events       |>mutate(openID = as.character(openID), closeID = as.character(closeID))
+  other_events <- other_events |>mutate(openID = as.character(openID), closeID = as.character(closeID))
   
   # Compute durations ---------------------
-  events <- events %>% mutate(duration = difftime(closeTS, openTS, units = "mins"))
+  events <- events |>mutate(duration = difftime(closeTS, openTS, units = "mins"))
   
 
   # Temporary event key ---------------------
-  events <- events %>% mutate(event_key = paste0(openID, "__", closeID))
+  events <- events |>mutate(event_key = paste0(openID, "__", closeID))
   
 
   # Precompute next real openTS ---------------------
-  events_sorted <- events %>% arrange(openTS)
-  events_sorted <- events_sorted %>% mutate(next_openTS = lead(openTS))
+  events_sorted <- events |>arrange(openTS)
+  events_sorted <- events_sorted |>mutate(next_openTS = lead(openTS))
   
 
   # Identify targets ---------------------
-  targets <- events_sorted %>% filter(as.numeric(duration) > max_duration_mins)
+  targets <- events_sorted |>filter(as.numeric(duration) > max_duration_mins)
   
   corrected_rows <- vector("list", nrow(targets))
   report_rows    <- vector("list", nrow(targets))
@@ -88,9 +88,9 @@ fix_long_door_events <- function(events,
     
 
     # Candidate from other door ---------------------
-    d_other <- other_events %>%
-      filter(closeTS > closeTS_orig) %>%
-      arrange(closeTS) %>%
+    d_other <- other_events |>
+      filter(closeTS > closeTS_orig) |>
+      arrange(closeTS) |>
       slice(1)
     
     d_other_time <- if (nrow(d_other) == 0) NA else d_other$closeTS
@@ -101,10 +101,10 @@ fix_long_door_events <- function(events,
     }
     
     # Candidate from raw logs ---------------------
-    repeating_time <- raw_logs %>%
-      filter(timestamp > openTS_trow + 1, !is_event) %>%
-      arrange(timestamp) %>%
-      slice(1) %>%
+    repeating_time <- raw_logs |>
+      filter(timestamp > openTS_trow + 1, !is_event) |>
+      arrange(timestamp) |>
+      slice(1) |>
       pull(timestamp)
     
     if (length(repeating_time) == 0 ||
@@ -261,7 +261,7 @@ fix_long_door_events <- function(events,
     # Store results ---------------------
     if (length(created) == 0) {
       corrected_rows[[i]] <- make_row(
-        trow %>% mutate(is_synthetic = FALSE, source = "unchanged")
+        trow |>mutate(is_synthetic = FALSE, source = "unchanged")
       )
     } else {
       corrected_rows[[i]] <- vctrs::vec_rbind(!!!lapply(created, make_row))
@@ -281,17 +281,17 @@ fix_long_door_events <- function(events,
   corrected_tbl <- vctrs::vec_rbind(!!!corrected_rows)
   
   # Non-targets ---------------------
-  non_targets <- events_sorted %>%
-    filter(!(event_key %in% targets$event_key)) %>%
+  non_targets <- events_sorted |>
+    filter(!(event_key %in% targets$event_key)) |>
     mutate(is_synthetic = FALSE, source = "unchanged")
   
   # Final table ---------------------
-  final_events <- vctrs::vec_rbind(non_targets, corrected_tbl) %>%
-    arrange(openTS) %>%
+  final_events <- vctrs::vec_rbind(non_targets, corrected_tbl) |>
+    arrange(openTS) |>
     mutate(
       duration = difftime(closeTS, openTS, units = "mins"),
       event_key = paste0(openID, "__", closeID)
-    ) %>%
+    ) |>
     select(-any_of(c("original_openID", "next_openTS")))
   
   report_tbl <- vctrs::vec_rbind(!!!report_rows)
@@ -315,9 +315,9 @@ door_events = function(
   
   ### Choosing and Cleaning Data ----------------------------------------------------------
   chosen = chosen_pantry
-  data_clean = data %>% filter(device_id == chosen)
+  data_clean = data
   
-  data_clean <- data_clean %>% 
+  data_clean <- data_clean |>
     mutate(timestamp = ymd_hms(timestamp, tz = "UTC"),
            timestamp = with_tz(timestamp, "America/Los_Angeles"))
   
@@ -326,7 +326,7 @@ door_events = function(
     cutoff <- ymd_hms("2026-01-29 16:26:30", tz = "America/Los_Angeles")
     restart <- ymd_hms("2026-02-24 12:00:00", tz = "America/Los_Angeles")
     
-    data_clean <- data_clean %>%
+    data_clean <- data_clean |>
       mutate(scale1 = if_else(timestamp >= cutoff & timestamp <= restart, 0, scale1))
   }
   
@@ -338,8 +338,8 @@ door_events = function(
   ### Helper to process a specific door ----------------------------------------------------
   process_door <- function(df, door_col_name, group_id) {
     # Extract just the relevant columns
-    door_data <- df %>%
-      select(id, timestamp, !!sym(door_col_name)) %>%
+    door_data <- df |>
+      select(id, timestamp, !!sym(door_col_name)) |>
       rename(is_open = !!sym(door_col_name))
     
     # If no open events ever occur for this door, return an empty structured tibble
@@ -349,18 +349,18 @@ door_events = function(
                     group=character(), duration=numeric()))
     }
     
-    opens <- door_data %>% filter(is_open) %>% select(openID = id, openTS = timestamp) %>% mutate(group = group_id)
-    closes <- door_data %>% filter(!is_open) %>% select(closeID = id, closeTS = timestamp) %>% mutate(group = group_id)
+    opens <- door_data |>filter(is_open) |>select(openID = id, openTS = timestamp) |>mutate(group = group_id)
+    closes <- door_data |>filter(!is_open) |>select(closeID = id, closeTS = timestamp) |>mutate(group = group_id)
     
-    res <- opens %>%
-      left_join(closes, by = "group", relationship = "many-to-many") %>%
-      filter(openTS < closeTS) %>%
-      group_by(openTS) %>%
-      slice_min(closeTS, n = 1, with_ties = FALSE) %>%
-      ungroup() %>%
-      group_by(closeID) %>%
-      slice_min(openTS, n = 1, with_ties = FALSE) %>%
-      ungroup() %>%
+    res <- opens |>
+      left_join(closes, by = "group", relationship = "many-to-many") |>
+      filter(openTS < closeTS) |>
+      group_by(openTS) |>
+      slice_min(closeTS, n = 1, with_ties = FALSE) |>
+      ungroup() |>
+      group_by(closeID) |>
+      slice_min(openTS, n = 1, with_ties = FALSE) |>
+      ungroup() |>
       mutate(duration = difftime(closeTS, openTS, unit = "mins"))
     
     return(res)
@@ -391,9 +391,9 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
   # 1. Combine fixed events from both doors
   # We use the results from fix_long_door_events (corrected_events)
   all_intervals <- bind_rows(
-    d1_events$corrected_events %>% transmute(type = "d1", start = openTS, end = closeTS, id_open = openID, id_close = closeID),
-    d2_events$corrected_events %>% transmute(type = "d2", start = openTS, end = closeTS, id_open = openID, id_close = closeID)
-  ) %>% 
+    d1_events$corrected_events |>transmute(type = "d1", start = openTS, end = closeTS, id_open = openID, id_close = closeID),
+    d2_events$corrected_events |>transmute(type = "d2", start = openTS, end = closeTS, id_open = openID, id_close = closeID)
+  ) |>
     arrange(start)
   
   if (nrow(all_intervals) == 0) return(tibble())
@@ -401,7 +401,7 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
   # 2. Vectorized logic to identify new clusters
   # Instead of a for-loop (which is slow in R), we check if the current start 
   # is greater than the running maximum end of previous rows + gap
-  processed <- all_intervals %>%
+  processed <- all_intervals |>
     mutate(
       prev_max_end = lag(cummax(as.numeric(end)), default = 0),
       is_new_cluster = as.numeric(start) > (prev_max_end + (gap_mins * 60)),
@@ -409,8 +409,8 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
     )
   
   # 3. Summarize into activities
-  activities <- processed %>%
-    group_by(cluster_id) %>%
+  activities <- processed |>
+    group_by(cluster_id) |>
     summarise(
       activity_start = min(start),
       activity_end = max(end),
@@ -419,13 +419,13 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
       open_ids = list(unique(id_open)),
       close_ids = list(unique(id_close)),
       .groups = "drop"
-    ) %>%
+    ) |>
     mutate(activity_duration = difftime(activity_end, activity_start, units = "mins"))
   
   return(activities)
 }
 
-# # data %>% distinct(device_id)
+# # data |>distinct(device_id)
 # # a = door_events(chosen_pantry = "Greenwood", data = data)
 # # 
 # # c = pantry_activities(a[["d1_events"]], a[['d2_events']])
@@ -434,20 +434,20 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
 # # Graphically -----
 # 
 # ## events ----
-# # df_steps <- a$d1_events$corrected_events %>%
-# #   select(openTS, closeTS) %>%
+# # df_steps <- a$d1_events$corrected_events |>
+# #   select(openTS, closeTS) |>
 # #   mutate(
 # #     open = 1,
 # #     close = 0
-# #   ) %>%
+# #   ) |>
 # #   pivot_longer(
 # #     cols = c(openTS, closeTS),
 # #     names_to = "event",
 # #     values_to = "timestamp"
-# #   ) %>%
+# #   ) |>
 # #   mutate(
 # #     value = if_else(event == "openTS", 1, 0)
-# #   ) %>%
+# #   ) |>
 # #   arrange(timestamp)
 # 
 # ggplot(df_steps, aes(x = timestamp, y = value)) +
@@ -469,20 +469,20 @@ pantry_activities <- function(d1_events, d2_events, gap_mins = 1.5) {
 # 
 # ## Activities ----
 # 
-# # df_steps2 <- c %>%
-# #   select(cluster_id, activity_start, activity_end) %>%
+# # df_steps2 <- c |>
+# #   select(cluster_id, activity_start, activity_end) |>
 # #   mutate(
 # #     start_val = 1,
 # #     end_val   = 0
-# #   ) %>%
+# #   ) |>
 # #   pivot_longer(
 # #     cols = c(activity_start, activity_end),
 # #     names_to = "event",
 # #     values_to = "timestamp"
-# #   ) %>%
+# #   ) |>
 # #   mutate(
 # #     value = if_else(event == "activity_start", 1, 0)
-# #   ) %>%
+# #   ) |>
 # #   arrange(timestamp)
 # 
 # ggplot(df_steps2, aes(x = timestamp, y = value)) +
@@ -527,14 +527,14 @@ get_closest_reading <- function(timestamp, logs, direction = "before") {
   "
   
   if (direction == "before") {
-    reading <- logs %>%
-      filter(timestamp <= !!timestamp) %>%
-      arrange(desc(timestamp)) %>%
+    reading <- logs |>
+      filter(timestamp <= !!timestamp) |>
+      arrange(desc(timestamp)) |>
       slice(1)
   } else {
-    reading <- logs %>%
-      filter(timestamp >= !!timestamp) %>%
-      arrange(timestamp) %>%
+    reading <- logs |>
+      filter(timestamp >= !!timestamp) |>
+      arrange(timestamp) |>
       slice(1)
   }
   
@@ -549,8 +549,8 @@ get_closest_reading <- function(timestamp, logs, direction = "before") {
     ))
   }
   
-  reading %>%
-    select(scale1, scale2, scale3, scale4, timestamp) %>%
+  reading |>
+    select(scale1, scale2, scale3, scale4, timestamp) |>
     slice(1)
 }
 
@@ -561,34 +561,34 @@ get_closest_reading <- function(timestamp, logs, direction = "before") {
 activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) {
   
   
-  raw_logs = raw_logs %>% 
+  raw_logs = raw_logs |>
     mutate(timestamp = ymd_hms(timestamp, tz = "UTC"),
            timestamp = with_tz(timestamp, "America/Los_Angeles"))
   # 1. Combine corrected events from both doors
   all_corrected_events <- bind_rows(
-    d1_events$corrected_events %>% mutate(door = "d1"),
-    d2_events$corrected_events %>% mutate(door = "d2")
+    d1_events$corrected_events |>mutate(door = "d1"),
+    d2_events$corrected_events |>mutate(door = "d2")
   )
   
   # 2. Unnest IDs and ensure they are characters for the join
-  activities_expanded= activities %>%
-    unnest(open_ids) %>%
-    unnest(close_ids) %>%
+  activities_expanded= activities |>
+    unnest(open_ids) |>
+    unnest(close_ids) |>
     mutate(
       open_ids = as.character(open_ids),
       close_ids = as.character(close_ids)
     )
   
   # 3. Join with corrected events
-  activities_with_events <- activities_expanded %>%
+  activities_with_events <- activities_expanded |>
     left_join(
-      all_corrected_events %>% select(openID, openTS, closeID, closeTS, source, door),
+      all_corrected_events |>select(openID, openTS, closeID, closeTS, source, door),
       by = c("open_ids" = "openID", "close_ids" = "closeID")
     )
   
   # 4. Summarize by activity (cluster_id)
-  activities_with_readings <- activities_with_events %>%
-    group_by(cluster_id) %>%
+  activities_with_readings <- activities_with_events |>
+    group_by(cluster_id) |>
     summarise(
       activity_start = first(activity_start),
       activity_end = first(activity_end),
@@ -603,19 +603,19 @@ activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) 
       case_replaced_closing = sum(source == "replaced_closing", na.rm = TRUE),
       case_unchanged = sum(source == "unchanged", na.rm = TRUE),
       .groups = "drop"
-    ) %>%
+    ) |>
     # 5. Fetch readings
     mutate(
       start_reading = map(activity_start, ~get_closest_reading(.x, raw_logs, "before")),
       end_reading = map(activity_end, ~get_closest_reading(.x, raw_logs, "after"))
-    ) %>%
+    ) |>
     # 6. Unnest with simplified names
     # We use names_sep = "_" so the columns become start_reading_scale1, etc.
-    unnest(start_reading, names_sep = "_") %>%
+    unnest(start_reading, names_sep = "_") |>
     unnest(end_reading, names_sep = "_")
   
   # 7. Final Calculation using the corrected column names
-  activities_summary <- activities_with_readings %>%
+  activities_summary <- activities_with_readings |>
     mutate(
       case_synthetic_events = case_split_partA + case_split_partB + case_replaced_closing,
       
