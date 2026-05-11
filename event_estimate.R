@@ -561,9 +561,11 @@ get_closest_reading <- function(timestamp, logs, direction = "before") {
 activities_with_weights <- function(activities, d1_events, d2_events, raw_logs) {
   
   
+  # Negative scale readings mean the scale is empty (sensor drift below zero). Clamp to 0.
   raw_logs = raw_logs |>
     mutate(timestamp = ymd_hms(timestamp, tz = "UTC"),
-           timestamp = with_tz(timestamp, "America/Los_Angeles"))
+           timestamp = with_tz(timestamp, "America/Los_Angeles"),
+           across(c(scale1, scale2, scale3, scale4), ~ pmax(.x, 0)))
   # 1. Combine corrected events from both doors
   all_corrected_events <- bind_rows(
     d1_events$corrected_events |>mutate(door = "d1"),

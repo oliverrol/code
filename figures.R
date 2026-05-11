@@ -345,9 +345,9 @@ acts_typed <- all_activities_weighted |>
   filter(!is.na(total_weight_change)) |>
   mutate(
     activity_type = case_when(
-      total_weight_change > 0 ~ "Donation",
-      total_weight_change < 0 ~ "Consumption",
-      TRUE                    ~ "No Change"
+      total_weight_change >  0.3 ~ "Donation",
+      total_weight_change < -0.3 ~ "Consumption",
+      TRUE                       ~ "No Change"
     ),
     activity_type = factor(activity_type, levels = c("Donation", "Consumption", "No Change")),
     pantry_label  = factor(pantry_labels[pantry], levels = pantry_labels)
